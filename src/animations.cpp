@@ -70,7 +70,7 @@ void wifiConnectAnimation(CRGB* leds) {
     
     // Rainbow animation for 6 seconds
     for (int i = 0; i < 600; i++) {
-        writeAllWords(leds, CHSV(hue++, 255, 255));
+        writeAllWords(leds, CHSV(hue++, 255, 255), 10);
         FastLED.show();
         vTaskDelay(pdMS_TO_TICKS(10));
     }
@@ -86,12 +86,12 @@ void wifiConnectAnimation(CRGB* leds) {
 }
 
 // Helper to light up all words for animations
-void writeAllWords(CRGB* ledArray, CHSV color) {
+
+void writeAllWords(CRGB* ledArray, CHSV color, int rate) {
   for (int i = 0; i < numWords; i++) {
-    for (int j = 0; j < clockWords[i].wordLength; j++) {
-        ledArray[clockWords[i].startIndex + j] = color;
-    }
+    rainbowRipple(clockWords[i], ledArray, color);
   }
+  //vTaskDelay(pdMS_TO_TICKS(rate));
 }
 
 

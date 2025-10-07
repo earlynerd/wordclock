@@ -31,7 +31,7 @@ void timeColorChange(const Word& w, CRGB* ledArray, CHSV color);
 // These animations take over the display and are RTOS-friendly.
 void indicateNumber(CRGB* leds, uint8_t num, CHSV color);
 void wifiConnectAnimation(CRGB* leds);
-void writeAllWords(CRGB* ledArray, CHSV color);
+void writeAllWords(CRGB* ledArray, CHSV color, int rate);
 
 #endif // ANIMATIONS_H
 

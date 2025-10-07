@@ -8,6 +8,7 @@
 
 #include <Arduino.h>
 
+
 /**
  * @brief The main function for the WiFi management task.
  * @param pvParameters Pass `(void*)true` to indicate a manual sync request.
