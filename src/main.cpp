@@ -29,6 +29,10 @@ Adafruit_IL0373 display(212, 104, EPD_DC, EPD_RESET, EPD_CS, SRAM_CS, EPD_BUSY, 
 
 
 QueueHandle_t clockCommandQueue;
+QueueHandle_t networkEventQueue;
+
+
+
 TaskHandle_t clockTaskHandle;
 TaskHandle_t buttonTaskHandle;
 TaskHandle_t wifiTaskHandle;
@@ -70,6 +74,7 @@ void setup()
     //    ;
     Serial.println("\n--- Word Clock Starting Up ---");
     preferences.begin(NVS_NAMESPACE, false);
+    WiFi.onEvent(WiFiEvent);
     if(!digitalRead(BUTTON_1_PIN) && !digitalRead(BUTTON_2_PIN))
     {
         Serial.println("both buttons pressed at boot, NVS clear triggered.");
@@ -92,7 +97,11 @@ void setup()
     {
         Serial.println("[ERROR] Could not create the clock command queue!");
     }
-
+    networkEventQueue = xQueueCreate(5, sizeof(NetworkEvent_t));
+    if (networkEventQueue == NULL)
+    {
+        Serial.println("[ERROR] Could not create the network event queue!");
+    }
     Serial.println("--- Initial Heap Status ---");
     log_heap_status();
     Serial.println("---------------------------");

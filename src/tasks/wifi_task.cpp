@@ -31,6 +31,34 @@ extern TaskHandle_t clockTaskHandle;
 extern char time_zone[64];
 extern Preferences preferences;
 const String useragent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
+extern QueueHandle_t networkEventQueue;
+
+void WiFiEvent(WiFiEvent_t event) {
+    BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+    NetworkEvent_t evt;
+
+    switch (event) {
+        case ARDUINO_EVENT_WIFI_STA_GOT_IP:
+            Serial.println("WiFi Event: GOT IP");
+            evt = WIFI_EVENT_CONNECTED;
+            // Use the ISR-safe version to send to the queue
+            xQueueSendFromISR(networkEventQueue, &evt, &xHigherPriorityTaskWoken);
+            break;
+        case ARDUINO_EVENT_WIFI_STA_DISCONNECTED:
+            Serial.println("WiFi Event: DISCONNECTED");
+            evt = WIFI_EVENT_DISCONNECTED;
+            xQueueSendFromISR(networkEventQueue, &evt, &xHigherPriorityTaskWoken);
+            break;
+        default:
+            break;
+    }
+
+    // If a higher priority task was waiting for the queue, yield
+    if (xHigherPriorityTaskWoken) {
+        portYIELD_FROM_ISR();
+    }
+}
+
 
 WiFiProvisioner::Config customCfg(
     WIFI_PROV_SSID,                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        // Access Point Name
@@ -51,6 +79,63 @@ WiFiProvisioner::Config customCfg(
     true                                          // Show Reset Field
 );
 WiFiProvisioner provisioner(customCfg);
+
+bool initializeFromRtc()
+{
+    if (!rtc.begin())
+    {
+        Serial.println("[ERROR] Couldn't find RTC! Clock will not keep time without power.");
+        return false;
+    }
+    else
+    {
+        ClockCommand cmd = {CommandType::START_CLOCK_DISPLAY};
+        // Check if the RTC has lost power and its time is invalid
+        if (rtc.lostPower())
+        {
+            Serial.println("[WARN] RTC lost power. Setting time to compile time as a fallback.");
+            // This sets the RTC to the time this sketch was compiled
+            rtc.adjust(DateTime(F(__DATE__), F(__TIME__)));
+            xQueueSend(clockCommandQueue, &cmd, 0);
+            return false;
+        }
+
+        DateTime rtcnow = rtc.now();
+        // Sanity check the year to ensure the time is plausible before using it
+        if (rtcnow.year() < 2025)
+        {
+            Serial.printf("[WARN] RTC has an invalid time (Year: %d). Waiting for WiFi sync.\n", rtcnow.year());
+            xQueueSend(clockCommandQueue, &cmd, 0);
+            return false;
+            // Do not set system time from an invalid RTC time
+        }
+        else
+        {
+            // The RTC time is valid, so set the system time
+            struct timeval tv;
+            tv.tv_sec = rtcnow.unixtime();
+            settimeofday(&tv, NULL);
+            Serial.println("System time initialized from hardware RTC.");
+
+            // Apply the last known timezone from persistent storage
+            String tz_string = preferences.getString(NVS_TZ_KEY, "");
+            if (tz_string.length() > 0)
+            {
+                strncpy(time_zone, tz_string.c_str(), sizeof(time_zone) - 1);
+                setenv("TZ", time_zone, 1);
+                tzset();
+                Serial.printf("Timezone set from NVS: %s\n", time_zone);
+                
+            }
+            else
+            {
+                Serial.println("Timezone not yet known, defaulting to UTC for now.");
+            }
+            xQueueSend(clockCommandQueue, &cmd, 0);
+        }
+        return true;
+    }
+}
 
 static bool getTimezoneFromAPI(char *tz_buffer, size_t buffer_size)
 {
@@ -107,55 +192,78 @@ static bool getTimezoneFromAPI(char *tz_buffer, size_t buffer_size)
     return success;
 }
 
-void taskWiFi(void *pvParameters)
+bool ntpSync()
 {
-    if (!rtc.begin())
+     bool tz_success = false;
+    for (int i = 0; i < 115 && !tz_success; i++)
     {
-        Serial.println("[ERROR] Couldn't find RTC! Clock will not keep time without power.");
+        tz_success = getTimezoneFromAPI(time_zone, sizeof(time_zone));
+        if (!tz_success)
+            vTaskDelay(pdMS_TO_TICKS(2000));
     }
-    else
-    {
-        // Check if the RTC has lost power and its time is invalid
-        if (rtc.lostPower())
-        {
-            Serial.println("[WARN] RTC lost power. Setting time to compile time as a fallback.");
-            // This sets the RTC to the time this sketch was compiled
-            rtc.adjust(DateTime(F(__DATE__), F(__TIME__)));
-        }
 
-        DateTime rtcnow = rtc.now();
-        // Sanity check the year to ensure the time is plausible before using it
-        if (rtcnow.year() < 2025)
-        {
-            Serial.printf("[WARN] RTC has an invalid time (Year: %d). Waiting for WiFi sync.\n", rtcnow.year());
-            // Do not set system time from an invalid RTC time
+    if (tz_success)
+    {
+        display.setTextColor(EPD_BLACK);
+        display.println("Success!");
+        display.setTextColor(EPD_RED);
+        display.print("tz: ");
+        display.setTextColor(EPD_BLACK);
+        display.println(time_zone);
+        display.display();
+        preferences.putString(NVS_TZ_KEY, time_zone);
+        Serial.printf("[WiFi Task] Timezone '%s' saved to NVS.\n", time_zone);
+
+        Serial.printf("[WiFi Task] Configuring system time for timezone '%s' using NTP.\n", time_zone);
+        configTzTime(time_zone, NTP_SERVER_1, NTP_SERVER_2);
+
+        struct tm timeinfo;
+        if (getLocalTime(&timeinfo, 10000))
+        { // This waits for NTP and sets the system clock to UTC.
+            vTaskDelay(pdMS_TO_TICKS(5000));
+            Serial.println("[WiFi Task] System time synced via NTP.");
+            char time_buf[64];
+
+            //Force the entire C library for THIS task to adopt the new timezone setting.
+            setenv("TZ", time_zone, 1);
+            tzset();
+
+            // Now that the timezone is set, get the time again to correctly convert it for logging.
+            time_t now;
+            time(&now);
+            localtime_r(&now, &timeinfo);
+            strftime(time_buf, sizeof(time_buf), "%A, %B %d %Y %H:%M:%S %Z", &timeinfo);
+
+            Serial.printf("[WiFi Task] The current local time is now: %s\n", time_buf);
+            display.println("last NTP sync:");
+            display.println(time_buf);
+            display.display();
+            // if (rtc.begin())
+            // {
+            // 'now' is already the correct UTC epoch time, which is what the RTC needs.
+            rtc.adjust(DateTime(now));
+            Serial.println("[WiFi Task] RTC has been updated with correct UTC time.");
+            //}
         }
         else
         {
-            // The RTC time is valid, so set the system time
-            struct timeval tv;
-            tv.tv_sec = rtcnow.unixtime();
-            settimeofday(&tv, NULL);
-            Serial.println("System time initialized from hardware RTC.");
-
-            // Apply the last known timezone from persistent storage
-            String tz_string = preferences.getString(NVS_TZ_KEY, "");
-            if (tz_string.length() > 0)
-            {
-                strncpy(time_zone, tz_string.c_str(), sizeof(time_zone) - 1);
-                setenv("TZ", time_zone, 1);
-                tzset();
-                Serial.printf("Timezone set from NVS: %s\n", time_zone);
-                
-            }
-            else
-            {
-                Serial.println("Timezone not yet known, defaulting to UTC for now.");
-            }
+            Serial.println("[WiFi Task] Failed to sync time from NTP server.");
         }
-        ClockCommand cmd = {CommandType::START_CLOCK_DISPLAY};
-        xQueueSend(clockCommandQueue, &cmd, 0);
     }
+    else
+    {
+        Serial.println("[WiFi Task] Failed to get timezone after all retries.");
+        display.setTextColor(EPD_RED);
+        display.println("NTP Sync Fail.");
+        display.display();
+    }
+}
+
+void taskWiFi(void *pvParameters)
+{
+
+    //run through the full process once as the task is created, then pull asynchronous tasks from teh queue
+    initializeFromRtc();
     display.begin();
     display.clearBuffer();
     display.setTextColor(EPD_BLACK);
@@ -236,79 +344,7 @@ void taskWiFi(void *pvParameters)
     }
     Serial.printf("[WiFi Task] Successfully connected to WiFi! IP: %s\n", WiFi.localIP().toString().c_str());
 
-    // ClockCommand cmd = {CommandType::SHOW_WIFI_ANIMATION};
-    // xQueueSend(clockCommandQueue, &cmd, 0);
-
-    // Serial.println("[WiFi Task] Suspending display task to free RAM for HTTPS.");
-    // vTaskSuspend(clockTaskHandle);
-    // vTaskDelay(pdMS_TO_TICKS(1000));
-
-    bool tz_success = false;
-    for (int i = 0; i < 115 && !tz_success; i++)
-    {
-        tz_success = getTimezoneFromAPI(time_zone, sizeof(time_zone));
-        if (!tz_success)
-            vTaskDelay(pdMS_TO_TICKS(2000));
-    }
-
-    // Serial.println("[WiFi Task] Resuming display task.");
-    // vTaskResume(clockTaskHandle);
-
-    if (tz_success)
-    {
-        display.setTextColor(EPD_BLACK);
-        display.println("Success!");
-        display.setTextColor(EPD_RED);
-        display.print("tz: ");
-        display.setTextColor(EPD_BLACK);
-        display.println(time_zone);
-        display.display();
-        preferences.putString(NVS_TZ_KEY, time_zone);
-        Serial.printf("[WiFi Task] Timezone '%s' saved to NVS.\n", time_zone);
-
-        Serial.printf("[WiFi Task] Configuring system time for timezone '%s' using NTP.\n", time_zone);
-        configTzTime(time_zone, NTP_SERVER_1, NTP_SERVER_2);
-
-        struct tm timeinfo;
-        if (getLocalTime(&timeinfo, 10000))
-        { // This waits for NTP and sets the system clock to UTC.
-            vTaskDelay(pdMS_TO_TICKS(5000));
-            Serial.println("[WiFi Task] System time synced via NTP.");
-            char time_buf[64];
-
-            //Force the entire C library for THIS task to adopt the new timezone setting.
-            setenv("TZ", time_zone, 1);
-            tzset();
-
-            // Now that the timezone is set, get the time again to correctly convert it for logging.
-            time_t now;
-            time(&now);
-            localtime_r(&now, &timeinfo);
-            strftime(time_buf, sizeof(time_buf), "%A, %B %d %Y %H:%M:%S %Z", &timeinfo);
-
-            Serial.printf("[WiFi Task] The current local time is now: %s\n", time_buf);
-            display.println("last NTP sync:");
-            display.println(time_buf);
-            display.display();
-            // if (rtc.begin())
-            // {
-            // 'now' is already the correct UTC epoch time, which is what the RTC needs.
-            rtc.adjust(DateTime(now));
-            Serial.println("[WiFi Task] RTC has been updated with correct UTC time.");
-            //}
-        }
-        else
-        {
-            Serial.println("[WiFi Task] Failed to sync time from NTP server.");
-        }
-    }
-    else
-    {
-        Serial.println("[WiFi Task] Failed to get timezone after all retries.");
-        display.setTextColor(EPD_RED);
-        display.println("NTP Sync Fail.");
-        display.display();
-    }
+    ntpSync();
     
     // WiFi.disconnect(true);
     // WiFi.mode(WIFI_OFF);
