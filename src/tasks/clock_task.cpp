@@ -23,26 +23,33 @@ extern int utc_offset_sec; // We now use the UTC offset directly
 static int colorSchemeIndex = 0;
 static uint8_t baseHue = 0;
 bool first_run = true;
+bool time_valid = false;
 
 // --- Command Handler ---
 static void handleCommand(const ClockCommand& cmd) {
     switch (cmd.type) {
         case CommandType::NEXT_COLOR_SCHEME:
-            colorSchemeIndex = (leds, colorSchemeIndex + 1) % NUM_COLOR_SCHEMES;
-            indicateNumber(leds, colorSchemeIndex , CHSV(baseHue, 255, 255));
+            colorSchemeIndex = (colorSchemeIndex + 1) % NUM_COLOR_SCHEMES;
+            indicateNumber(leds, colorSchemeIndex + 1 , CHSV(baseHue, 255, 255));
             break;
         case CommandType::PREV_COLOR_SCHEME:
             colorSchemeIndex--;
             if (colorSchemeIndex < 0) colorSchemeIndex = NUM_COLOR_SCHEMES - 1;
-            indicateNumber(leds, colorSchemeIndex ,  CHSV(baseHue, 255, 255));
+            indicateNumber(leds, colorSchemeIndex + 1,  CHSV(baseHue, 255, 255));
             break;
         case CommandType::FORCE_WIFI_SYNC:
             Serial.println("Manual WiFi sync requested.");
             // Re-create the WiFi task to perform the sync.
-            xTaskCreatePinnedToCore(taskWiFi, "WiFi Task", 10000, (void*)true, 1, NULL, 0);
+            ClockCommand wificmd;
+            wificmd.type = CommandType::FORCE_WIFI_SYNC;
+            xTaskCreatePinnedToCore(taskWiFi, "WiFi Task", 30000, (void*)&wificmd, 1, NULL, 0);
             break;
         case CommandType::SHOW_WIFI_ANIMATION:
             wifiConnectAnimation(leds);
+            break;
+        case CommandType::START_CLOCK_DISPLAY:
+            time_valid = true;
+            vTaskDelay(pdMS_TO_TICKS(3000));
             break;
     }
 }
@@ -79,11 +86,15 @@ void taskClockUpdate(void *pvParameters) {
         // ------------------------------------
 
         // Update the display with the current time and color scheme
-        writeTime(timeinfo.tm_hour, timeinfo.tm_min, leds,CHSV(baseHue, 255, 255),(ColorScheme)colorSchemeIndex);
-         
+        if(time_valid)
+        {
+            writeTime(timeinfo.tm_hour, timeinfo.tm_min, leds,CHSV(baseHue, 255, 255),(ColorScheme)colorSchemeIndex);
+            FastLED.show();
+        } 
+        else wifiConnectAnimation(leds);
         // Add a single pixel indicator for power/status
-        leds[0] = CRGB(5, 5, 5);
-        FastLED.show();
+        //leds[0] = CRGB(5, 5, 5);
+        
         
         vTaskDelay(pdMS_TO_TICKS(20)); // Update rate of 50Hz
     }

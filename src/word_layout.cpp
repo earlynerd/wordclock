@@ -10,29 +10,29 @@
 // Define all the individual words. Using static keeps them local to this file.
 // Grid is 13 letters wide and 8 rows tall, origin in lower left.
 static const Word words[] = {
-    {1,  1, 0, 7}, // IT
-    {2,  1, 3, 7}, // IS
-    {3,  2, 6, 7}, // TEN (minutes)
-    {5,  2, 9, 7}, // HALF
-    {7,  4, 0, 6}, // QUARTER
-    {11, 4, 7, 6}, // TWENTY
-    {15, 2, 0, 5}, // FIVE (minutes)
-    {17, 4, 5, 5}, // MINUTES
-    {21, 2, 0, 4}, // PAST
-    {23, 1, 4, 4}, // TO
-    {24, 2, 7, 4}, // ONE
-    {26, 2, 10,4}, // TWO
-    {28, 3, 0, 3}, // THREE
-    {31, 2, 5, 3}, // FOUR
-    {33, 2, 9, 3}, // FIVE
-    {35, 2, 0, 2}, // SIX
-    {37, 3, 3, 2}, // SEVEN
-    {40, 3, 8, 2}, // EIGHT
-    {43, 2, 0, 1}, // NINE
-    {45, 2, 4, 1}, // TEN
-    {47, 4, 7, 1}, // ELEVEN
-    {51, 3, 0, 0}, // TWELVE
-    {54, 4, 5, 0}  // O'CLOCK
+    {1,  1, 0, 7, "it"}, // IT
+    {2,  1, 3, 7, "is"}, // IS
+    {3,  2, 6, 7, "ten"}, // TEN (minutes)
+    {5,  2, 9, 7, "half"}, // HALF
+    {7,  4, 0, 6, "quarter"}, // QUARTER
+    {11, 4, 7, 6, "twenty"}, // TWENTY
+    {15, 2, 0, 5, "five"}, // FIVE (minutes)
+    {17, 4, 5, 5, "minutes"}, // MINUTES
+    {21, 2, 0, 4, "past"}, // PAST
+    {23, 1, 4, 4, "to"}, // TO
+    {24, 2, 7, 4, "one"}, // ONE
+    {26, 2, 10,4, "two"}, // TWO
+    {28, 3, 0, 3, "three"}, // THREE
+    {31, 2, 5, 3, "four"}, // FOUR
+    {33, 2, 9, 3, "five"}, // FIVE
+    {35, 2, 0, 2, "six"}, // SIX
+    {37, 3, 3, 2, "seven"}, // SEVEN
+    {40, 3, 8, 2, "eight"}, // EIGHT
+    {43, 2, 0, 1, "nine"}, // NINE
+    {45, 2, 4, 1, "ten"}, // TEN
+    {47, 4, 7, 1, "eleven"}, // ELEVEN
+    {51, 3, 0, 0, "twelve"}, // TWELVE
+    {54, 4, 5, 0, "oclock"}  // O'CLOCK
 };
 
 // Create pointers to make the time display logic more readable

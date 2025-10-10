@@ -8,12 +8,27 @@
 
 #include <Arduino.h>
 
+// --- EPD pins and configuration ---
+#define EPD_BUSY    16
+#define EPD_CS      17
+#define EPD_DC      21
+#define EPD_SCK     5
+#define EPD_MOSI    18
+#define EPD_MISO    19
+#define EPD_RESET   -1
+#define SRAM_CS     -1
+#define EPD_SPI &SPI // primary SPI
+#define FLEXIBLE_213
+#define EPD_DEBUG
+
+
+
 // --- LED Strip Configuration ---
 #define DATA_PIN_WC    12
 #define LED_TYPE    WS2812B
 #define COLOR_ORDER GRB
 #define NUM_LEDS    58
-#define BRIGHTNESS  80 // Lowered for longevity and comfort
+#define BRIGHTNESS  100 // Lowered for longevity and comfort
 
 // --- Hardware Pins ---
 #define BUTTON_1_PIN 14
@@ -34,6 +49,7 @@
 // Used to save the timezone between reboots
 #define NVS_NAMESPACE "word_clock"
 #define NVS_TZ_KEY    "timezone"
+\
 
 
 #endif // CONFIG_H

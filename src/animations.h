@@ -15,7 +15,7 @@ enum ColorScheme {
     NOISE_FIELD,
     RANDOMIZED_WORDS,
     RAINBOW_SENTENCE,
-    //TIME_COLOR_CHANGE,
+    TIME_COLOR_CHANGE,
     NUM_COLOR_SCHEMES // Helper to get the count of schemes
 };
 

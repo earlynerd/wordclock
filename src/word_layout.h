@@ -14,6 +14,7 @@ struct Word {
     uint8_t wordLength; // How many LEDs are in this word
     uint8_t x;          // X-coordinate on the grid (for animations)
     uint8_t y;          // Y-coordinate on the grid (for animations)
+    String word;
 };
 
 // Extern declarations make these variables available to other files.
