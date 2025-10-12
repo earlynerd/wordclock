@@ -9,6 +9,7 @@
 #include <Arduino.h>
 #include <WiFi.h>
 typedef enum {
+    WIFI_BOOT,
     WIFI_EVENT_CONNECTED,
     WIFI_EVENT_DISCONNECTED,
     FORCE_WIFI_SYNC,
@@ -20,6 +21,7 @@ typedef enum {
  */
 void taskWiFi(void *pvParameters);
 void WiFiEvent(WiFiEvent_t event);
+void task_epd(void *pvParameters);
 
 #endif // WIFI_TASK_H
 

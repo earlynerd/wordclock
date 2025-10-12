@@ -33,32 +33,37 @@ extern Preferences preferences;
 const String useragent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
 extern QueueHandle_t networkEventQueue;
 
-void WiFiEvent(WiFiEvent_t event) {
+TaskHandle_t epdTask;
+QueueHandle_t epdqueue;
+
+void WiFiEvent(WiFiEvent_t event)
+{
     BaseType_t xHigherPriorityTaskWoken = pdFALSE;
     NetworkEvent_t evt;
 
-    switch (event) {
-        case ARDUINO_EVENT_WIFI_STA_GOT_IP:
-            Serial.println("WiFi Event: GOT IP");
-            evt = WIFI_EVENT_CONNECTED;
-            // Use the ISR-safe version to send to the queue
-            xQueueSendFromISR(networkEventQueue, &evt, &xHigherPriorityTaskWoken);
-            break;
-        case ARDUINO_EVENT_WIFI_STA_DISCONNECTED:
-            Serial.println("WiFi Event: DISCONNECTED");
-            evt = WIFI_EVENT_DISCONNECTED;
-            xQueueSendFromISR(networkEventQueue, &evt, &xHigherPriorityTaskWoken);
-            break;
-        default:
-            break;
+    switch (event)
+    {
+    case ARDUINO_EVENT_WIFI_STA_GOT_IP:
+        Serial.println("WiFi Event: GOT IP");
+        evt = WIFI_EVENT_CONNECTED;
+        // Use the ISR-safe version to send to the queue
+        xQueueSendFromISR(networkEventQueue, &evt, &xHigherPriorityTaskWoken);
+        break;
+    case ARDUINO_EVENT_WIFI_STA_DISCONNECTED:
+        Serial.println("WiFi Event: DISCONNECTED");
+        evt = WIFI_EVENT_DISCONNECTED;
+        xQueueSendFromISR(networkEventQueue, &evt, &xHigherPriorityTaskWoken);
+        break;
+    default:
+        break;
     }
 
     // If a higher priority task was waiting for the queue, yield
-    if (xHigherPriorityTaskWoken) {
+    if (xHigherPriorityTaskWoken)
+    {
         portYIELD_FROM_ISR();
     }
 }
-
 
 WiFiProvisioner::Config customCfg(
     WIFI_PROV_SSID,                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        // Access Point Name
@@ -96,8 +101,6 @@ bool initializeFromRtc()
             Serial.println("[WARN] RTC lost power. Setting time to compile time as a fallback.");
             // This sets the RTC to the time this sketch was compiled
             rtc.adjust(DateTime(F(__DATE__), F(__TIME__)));
-            xQueueSend(clockCommandQueue, &cmd, 0);
-            return false;
         }
 
         DateTime rtcnow = rtc.now();
@@ -122,10 +125,9 @@ bool initializeFromRtc()
             if (tz_string.length() > 0)
             {
                 strncpy(time_zone, tz_string.c_str(), sizeof(time_zone) - 1);
-                setenv("TZ", time_zone, 1);
+                setenv("TZ", tz_string.c_str(), 1);
                 tzset();
                 Serial.printf("Timezone set from NVS: %s\n", time_zone);
-                
             }
             else
             {
@@ -194,7 +196,7 @@ static bool getTimezoneFromAPI(char *tz_buffer, size_t buffer_size)
 
 bool ntpSync()
 {
-     bool tz_success = false;
+    bool tz_success = false;
     for (int i = 0; i < 115 && !tz_success; i++)
     {
         tz_success = getTimezoneFromAPI(time_zone, sizeof(time_zone));
@@ -210,7 +212,8 @@ bool ntpSync()
         display.print("tz: ");
         display.setTextColor(EPD_BLACK);
         display.println(time_zone);
-        display.display();
+        xQueueSend(epdqueue, NULL, 0);
+        // display.display();
         preferences.putString(NVS_TZ_KEY, time_zone);
         Serial.printf("[WiFi Task] Timezone '%s' saved to NVS.\n", time_zone);
 
@@ -224,7 +227,7 @@ bool ntpSync()
             Serial.println("[WiFi Task] System time synced via NTP.");
             char time_buf[64];
 
-            //Force the entire C library for THIS task to adopt the new timezone setting.
+            // Force the entire C library for THIS task to adopt the new timezone setting.
             setenv("TZ", time_zone, 1);
             tzset();
 
@@ -237,10 +240,11 @@ bool ntpSync()
             Serial.printf("[WiFi Task] The current local time is now: %s\n", time_buf);
             display.println("last NTP sync:");
             display.println(time_buf);
-            display.display();
-            // if (rtc.begin())
-            // {
-            // 'now' is already the correct UTC epoch time, which is what the RTC needs.
+            xQueueSend(epdqueue, NULL, 0);
+            // display.display();
+            //  if (rtc.begin())
+            //  {
+            //  'now' is already the correct UTC epoch time, which is what the RTC needs.
             rtc.adjust(DateTime(now));
             Serial.println("[WiFi Task] RTC has been updated with correct UTC time.");
             //}
@@ -255,100 +259,143 @@ bool ntpSync()
         Serial.println("[WiFi Task] Failed to get timezone after all retries.");
         display.setTextColor(EPD_RED);
         display.println("NTP Sync Fail.");
-        display.display();
+        xQueueSend(epdqueue, NULL, 0);
+        // display.display();
     }
 }
 
 void taskWiFi(void *pvParameters)
 {
 
-    //run through the full process once as the task is created, then pull asynchronous tasks from teh queue
+    // run through the full process once as the task is created, then pull asynchronous tasks from teh queue
     initializeFromRtc();
-    display.begin();
-    display.clearBuffer();
-    display.setTextColor(EPD_BLACK);
-    display.setRotation(2);
-    display.setTextSize(1);
-    display.setCursor(0, 0);
-    ClockCommand *rxcmd;
-    bool isManualSync = false;
-    if (pvParameters)
+    epdqueue = xQueueCreate(5, 0);
+    xTaskCreate(task_epd, "Epaper Task", 2000, NULL, 1, &epdTask);
+    NetworkEvent_t rxevent = WIFI_BOOT;
+    bool firstBoot = true;
+    while (true)
     {
-        rxcmd = (ClockCommand *)pvParameters;
-        if (rxcmd->type == CommandType::FORCE_WIFI_SYNC)
-            isManualSync = true;
-        else if(rxcmd->type == CommandType::CLEAR_WIFI)
+        if (!firstBoot)
+            xQueueReceive(networkEventQueue, &rxevent, portMAX_DELAY);
+        else
+            firstBoot = false;
+        switch (rxevent)
         {
-             WiFi.mode(WIFI_STA);
+        case WIFI_BOOT:
+        {
+            // initial connection at boot
+            WiFi.mode(WIFI_STA);
             WiFi.begin();
             unsigned long start = millis();
             while (WiFi.status() != WL_CONNECTED && millis() - start < 10000)
             {
                 vTaskDelay(pdMS_TO_TICKS(500));
             }
+            if (WiFi.status() != WL_CONNECTED)
+            {
+                Serial.println("[WiFi Task] Could not connect. Starting provisioning portal.");
+                display.clearBuffer();
+                display.setCursor(0, 0);
+                display.setTextSize(1);
+                display.setTextColor(EPD_RED);
+                display.print("Status: ");
+                display.println("Configure WiFI");
+                display.setTextColor(EPD_BLACK);
+                display.println("Connect your device to AP SSID: ");
+                display.setTextColor(EPD_BLACK);
+                display.println(WIFI_PROV_SSID);
+                display.println("Then sign into captive portal");
+                display.println("or google.com in your browser");
+                xQueueSend(epdqueue, NULL, 0);
+                provisioner.startProvisioning();
+                // display.display();
+            }
+            else 
+            {
+                ntpSync();
+            }
+        }
+        break;
+        case WIFI_EVENT_CONNECTED:
+        {
+            Serial.printf("[WiFi Task] Successfully connected to WiFi! IP: %s\n", WiFi.localIP().toString().c_str());
+            //display.clearBuffer();
+            display.setTextSize(1);
+            display.setTextColor(EPD_RED);
+            display.setCursor(0, 0);
+            display.print("Status: ");
+            display.setTextColor(EPD_BLACK);
+            display.println("WiFi Connected");
+            display.setTextColor(EPD_RED);
+            display.print("SSID: ");
+            display.setTextColor(EPD_BLACK);
+            display.println(WiFi.SSID());
+            display.setTextColor(EPD_RED);
+            display.print("IP: ");
+            display.setTextColor(EPD_BLACK);
+            display.println(WiFi.localIP().toString().c_str());
+            display.println("Connecting to time server... ");
+            xQueueSend(epdqueue, NULL, 0);
+            
+            // push update to epd task
+        }
+        break;
+        case WIFI_EVENT_DISCONNECTED:
+        {
+            // attempt reconnect
+        }
+        break;
+        case FORCE_WIFI_SYNC:
+        {
+            ntpSync();
+            // trigger ntp and timezone sync
+        }
+        break;
+        case CLEAR_WIFI:
+        {
+            if (WiFi.status() != WL_CONNECTED)
+            {
+                WiFi.mode(WIFI_STA);
+                WiFi.begin();
+                unsigned long start = millis();
+                while (WiFi.status() != WL_CONNECTED && millis() - start < 10000)
+                {
+                    vTaskDelay(pdMS_TO_TICKS(500));
+                }
+            }
             WiFi.disconnect(false, true);
             ESP.restart();
         }
-    }
-
-    Serial.printf("[WiFi Task] Started. Manual Sync: %s\n", isManualSync ? "Yes" : "No");
-
-    if (!isManualSync)
-    {
-        WiFi.mode(WIFI_STA);
-        WiFi.begin();
-        unsigned long start = millis();
-        while (WiFi.status() != WL_CONNECTED && millis() - start < 10000)
-        {
-            vTaskDelay(pdMS_TO_TICKS(500));
+        break;
         }
     }
 
-    if (WiFi.status() != WL_CONNECTED)
-    {
-        Serial.println("[WiFi Task] Could not connect. Starting provisioning portal.");
-        display.clearBuffer();
-        display.setCursor(0, 0);
-        display.setTextSize(1);
-        display.setTextColor(EPD_RED);
-        display.print("Status: ");
-        display.println("Configure WiFI");
-        display.setTextColor(EPD_BLACK);
-        display.println("Connect your device to AP SSID: ");
-        display.setTextColor(EPD_BLACK);
-        display.println(WIFI_PROV_SSID);
-        display.println("Then sign into captive portal");
-        display.println("or google.com in your browser");
-        display.display();
-        provisioner.startProvisioning();
-    }
+    // Serial.printf("[WiFi Task] Started. Manual Sync: %s\n", isManualSync ? "Yes" : "No");
+
     if (WiFi.status() == WL_CONNECTED)
     {
-        display.clearBuffer();
-        display.setTextSize(1);
-        display.setTextColor(EPD_RED);
-        display.setCursor(0, 0);
-        display.print("Status: ");
-        display.setTextColor(EPD_BLACK);
-        display.println("WiFi Connected");
-        display.setTextColor(EPD_RED);
-        display.print("SSID: ");
-        display.setTextColor(EPD_BLACK);
-        display.println(WiFi.SSID());
-        display.setTextColor(EPD_RED);
-        display.print("IP: ");
-        display.setTextColor(EPD_BLACK);
-        display.println(WiFi.localIP().toString().c_str());
-        display.println("Connecting to time server... ");
-        display.display();
-    }
-    Serial.printf("[WiFi Task] Successfully connected to WiFi! IP: %s\n", WiFi.localIP().toString().c_str());
 
-    ntpSync();
-    
+        // display.display();
+    }
+
     // WiFi.disconnect(true);
     // WiFi.mode(WIFI_OFF);
     // Serial.println("[WiFi Task] WiFi disabled. Task finished.");
-    vTaskDelete(NULL);
+    // vTaskDelete(NULL);
     // vTaskSuspend(NULL);
+}
+
+void task_epd(void *pvParameters)
+{
+    display.begin();
+    display.clearBuffer();
+    display.setTextColor(EPD_BLACK);
+    display.setRotation(2);
+    display.setTextSize(1);
+    display.setCursor(0, 0);
+    while (true)
+    {
+        xQueueReceive(epdqueue, NULL, portMAX_DELAY);
+        display.display();
+    }
 }

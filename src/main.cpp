@@ -106,10 +106,10 @@ void setup()
     log_heap_status();
     Serial.println("---------------------------");
 
-    xTaskCreatePinnedToCore(taskWiFi, "WiFi Task", 16353, NULL, 1, &wifiTaskHandle, 0);
-    xTaskCreatePinnedToCore(taskLogHeap, "Heap Logger", 2048, NULL, 0, &heapTaskHandle, 0);
-    xTaskCreatePinnedToCore(taskClockUpdate, "Clock Task", 6000, &clockCommandQueue, 5, &clockTaskHandle, 1);
-    xTaskCreatePinnedToCore(taskButtonCheck, "Button Task", 2048, NULL, 3, &buttonTaskHandle, 0);
+    xTaskCreate(taskWiFi, "WiFi Task", 16353, NULL, 1, &wifiTaskHandle);
+    xTaskCreate(taskLogHeap, "Heap Logger", 2048, NULL, 0, &heapTaskHandle);
+    xTaskCreate(taskClockUpdate, "Clock Task", 6000, &clockCommandQueue, 5, &clockTaskHandle);
+    xTaskCreate(taskButtonCheck, "Button Task", 2048, NULL, 3, &buttonTaskHandle);
 
     Serial.println("Setup complete. Tasks are running.");
 }
