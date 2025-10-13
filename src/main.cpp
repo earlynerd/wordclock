@@ -27,16 +27,17 @@ RTC_DS3231 rtc;
 CRGB leds[NUM_LEDS];
 Adafruit_IL0373 display(212, 104, EPD_DC, EPD_RESET, EPD_CS, SRAM_CS, EPD_BUSY, EPD_SPI);
 
-
 QueueHandle_t clockCommandQueue;
 QueueHandle_t networkEventQueue;
-
-
 
 TaskHandle_t clockTaskHandle;
 TaskHandle_t buttonTaskHandle;
 TaskHandle_t wifiTaskHandle;
 TaskHandle_t heapTaskHandle;
+
+TaskHandle_t epdTask;
+QueueHandle_t epdqueue;
+
 Preferences preferences; // For saving timezone
 
 // --- Global Time Variables ---
@@ -73,24 +74,8 @@ void setup()
     //while (!Serial)
     //    ;
     Serial.println("\n--- Word Clock Starting Up ---");
-    preferences.begin(NVS_NAMESPACE, false);
-    WiFi.onEvent(WiFiEvent);
-    if(!digitalRead(BUTTON_1_PIN) && !digitalRead(BUTTON_2_PIN))
-    {
-        Serial.println("both buttons pressed at boot, NVS clear triggered.");
-        preferences.clear();
-        preferences.end();
-        ClockCommand wificmd;
-        wificmd.type = CommandType::CLEAR_WIFI;
-        xTaskCreatePinnedToCore(taskWiFi, "WiFi Task", 30000, (void*)&wificmd, 1, NULL, 0);
-        vTaskDelay(portMAX_DELAY);
-    }
-    
 
-    FastLED.addLeds<LED_TYPE, DATA_PIN_WC, COLOR_ORDER>(leds, NUM_LEDS).setCorrection(TypicalLEDStrip);
-    FastLED.setBrightness(BRIGHTNESS);
-    FastLED.clear();
-    FastLED.show();
+    preferences.begin(NVS_NAMESPACE, false);
 
     clockCommandQueue = xQueueCreate(5, sizeof(ClockCommand));
     if (clockCommandQueue == NULL)
@@ -102,16 +87,42 @@ void setup()
     {
         Serial.println("[ERROR] Could not create the network event queue!");
     }
+    epdqueue = xQueueCreate(5, 0);
+    if(epdqueue == NULL)
+    {
+        Serial.println("[ERROR] Could not create the epapercommand queue!");
+    }
+
+    WiFi.onEvent(WiFiEvent);
+    if(!digitalRead(BUTTON_1_PIN) && !digitalRead(BUTTON_2_PIN))
+    {
+        Serial.println("both buttons pressed at boot, NVS clear triggered.");
+        preferences.clear();
+        preferences.end();
+        NetworkEvent_t evt = NetworkEvent_t::CLEAR_WIFI;
+        xQueueSend(networkEventQueue, &evt, 0);
+
+    }
+    
+
+    FastLED.addLeds<LED_TYPE, DATA_PIN_WC, COLOR_ORDER>(leds, NUM_LEDS).setCorrection(TypicalLEDStrip);
+    FastLED.setBrightness(BRIGHTNESS);
+    FastLED.clear();
+    FastLED.show();
+
+    
     Serial.println("--- Initial Heap Status ---");
     log_heap_status();
     Serial.println("---------------------------");
 
-    xTaskCreate(taskWiFi, "WiFi Task", 16353, NULL, 1, &wifiTaskHandle);
-    xTaskCreate(taskLogHeap, "Heap Logger", 2048, NULL, 0, &heapTaskHandle);
-    xTaskCreate(taskClockUpdate, "Clock Task", 6000, &clockCommandQueue, 5, &clockTaskHandle);
-    xTaskCreate(taskButtonCheck, "Button Task", 2048, NULL, 3, &buttonTaskHandle);
-
+    xTaskCreatePinnedToCore(taskWiFi, "WiFi Task", 20000, NULL, 1, &wifiTaskHandle, 0);
+    xTaskCreatePinnedToCore(taskLogHeap, "Heap Logger", 4096, NULL, 0, &heapTaskHandle, 0);
+    xTaskCreatePinnedToCore(taskClockUpdate, "Clock Task", 8192, &clockCommandQueue, 5, &clockTaskHandle, 1);
+    xTaskCreatePinnedToCore(taskButtonCheck, "Button Task", 1024, NULL, 3, &buttonTaskHandle, 0);
+    xTaskCreatePinnedToCore(task_epd, "Epaper Task", 4096, NULL, 1, &epdTask, 1);
     Serial.println("Setup complete. Tasks are running.");
+    NetworkEvent_t evt = NetworkEvent_t::WIFI_BOOT;
+    xQueueSend(networkEventQueue, &evt, portMAX_DELAY);
 }
 
 void loop()

@@ -28,7 +28,7 @@
 #define LED_TYPE    WS2812B
 #define COLOR_ORDER GRB
 #define NUM_LEDS    58
-#define BRIGHTNESS  100 // Lowered for longevity and comfort
+#define BRIGHTNESS  168 // Lowered for longevity and comfort
 
 // --- Hardware Pins ---
 #define BUTTON_1_PIN 14

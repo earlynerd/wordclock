@@ -37,14 +37,7 @@ static void handleCommand(const ClockCommand& cmd) {
             if (colorSchemeIndex < 0) colorSchemeIndex = NUM_COLOR_SCHEMES - 1;
             indicateNumber(leds, colorSchemeIndex + 1,  CHSV(baseHue, 255, 255));
             break;
-        case CommandType::FORCE_WIFI_SYNC:
-            Serial.println("Manual WiFi sync requested.");
-            // Re-create the WiFi task to perform the sync.
-            ClockCommand wificmd;
-            wificmd.type = CommandType::FORCE_WIFI_SYNC;
-            xTaskCreatePinnedToCore(taskWiFi, "WiFi Task", 30000, (void*)&wificmd, 1, NULL, 0);
-            break;
-        case CommandType::SHOW_WIFI_ANIMATION:
+         case CommandType::SHOW_WIFI_ANIMATION:
             wifiConnectAnimation(leds);
             break;
         case CommandType::START_CLOCK_DISPLAY:

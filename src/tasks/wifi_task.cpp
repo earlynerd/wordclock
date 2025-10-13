@@ -33,8 +33,8 @@ extern Preferences preferences;
 const String useragent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
 extern QueueHandle_t networkEventQueue;
 
-TaskHandle_t epdTask;
-QueueHandle_t epdqueue;
+extern TaskHandle_t epdTask;
+extern QueueHandle_t epdqueue;
 
 void WiFiEvent(WiFiEvent_t event)
 {
@@ -44,24 +44,18 @@ void WiFiEvent(WiFiEvent_t event)
     switch (event)
     {
     case ARDUINO_EVENT_WIFI_STA_GOT_IP:
-        Serial.println("WiFi Event: GOT IP");
+        //Serial.println("WiFi Event: GOT IP");
         evt = WIFI_EVENT_CONNECTED;
         // Use the ISR-safe version to send to the queue
         xQueueSendFromISR(networkEventQueue, &evt, &xHigherPriorityTaskWoken);
         break;
     case ARDUINO_EVENT_WIFI_STA_DISCONNECTED:
-        Serial.println("WiFi Event: DISCONNECTED");
+        //Serial.println("WiFi Event: DISCONNECTED");
         evt = WIFI_EVENT_DISCONNECTED;
         xQueueSendFromISR(networkEventQueue, &evt, &xHigherPriorityTaskWoken);
         break;
     default:
         break;
-    }
-
-    // If a higher priority task was waiting for the queue, yield
-    if (xHigherPriorityTaskWoken)
-    {
-        portYIELD_FROM_ISR();
     }
 }
 
@@ -247,11 +241,13 @@ bool ntpSync()
             //  'now' is already the correct UTC epoch time, which is what the RTC needs.
             rtc.adjust(DateTime(now));
             Serial.println("[WiFi Task] RTC has been updated with correct UTC time.");
+            return true;
             //}
         }
         else
         {
             Serial.println("[WiFi Task] Failed to sync time from NTP server.");
+            return false;
         }
     }
     else
@@ -260,6 +256,7 @@ bool ntpSync()
         display.setTextColor(EPD_RED);
         display.println("NTP Sync Fail.");
         xQueueSend(epdqueue, NULL, 0);
+        return false;
         // display.display();
     }
 }
@@ -269,120 +266,111 @@ void taskWiFi(void *pvParameters)
 
     // run through the full process once as the task is created, then pull asynchronous tasks from teh queue
     initializeFromRtc();
-    epdqueue = xQueueCreate(5, 0);
-    xTaskCreate(task_epd, "Epaper Task", 2000, NULL, 1, &epdTask);
+
     NetworkEvent_t rxevent = WIFI_BOOT;
-    bool firstBoot = true;
+    WiFi.mode(WIFI_STA);
+    WiFi.begin();
     while (true)
     {
-        if (!firstBoot)
-            xQueueReceive(networkEventQueue, &rxevent, portMAX_DELAY);
-        else
-            firstBoot = false;
-        switch (rxevent)
+        if (xQueueReceive(networkEventQueue, &rxevent, portMAX_DELAY))
         {
-        case WIFI_BOOT:
-        {
-            // initial connection at boot
-            WiFi.mode(WIFI_STA);
-            WiFi.begin();
-            unsigned long start = millis();
-            while (WiFi.status() != WL_CONNECTED && millis() - start < 10000)
+            switch (rxevent)
             {
-                vTaskDelay(pdMS_TO_TICKS(500));
+            case WIFI_EVENT_DISCONNECTED:
+            {
+                Serial.println("[WiFi Task] Wifi Event: Disconencted");
+                // attempt reconnect... fall through to WIFI_BOOT
             }
-            if (WiFi.status() != WL_CONNECTED)
+            case WIFI_BOOT:
             {
-                Serial.println("[WiFi Task] Could not connect. Starting provisioning portal.");
-                display.clearBuffer();
-                display.setCursor(0, 0);
-                display.setTextSize(1);
-                display.setTextColor(EPD_RED);
-                display.print("Status: ");
-                display.println("Configure WiFI");
-                display.setTextColor(EPD_BLACK);
-                display.println("Connect your device to AP SSID: ");
-                display.setTextColor(EPD_BLACK);
-                display.println(WIFI_PROV_SSID);
-                display.println("Then sign into captive portal");
-                display.println("or google.com in your browser");
-                xQueueSend(epdqueue, NULL, 0);
-                provisioner.startProvisioning();
-                // display.display();
-            }
-            else 
-            {
-                ntpSync();
-            }
-        }
-        break;
-        case WIFI_EVENT_CONNECTED:
-        {
-            Serial.printf("[WiFi Task] Successfully connected to WiFi! IP: %s\n", WiFi.localIP().toString().c_str());
-            //display.clearBuffer();
-            display.setTextSize(1);
-            display.setTextColor(EPD_RED);
-            display.setCursor(0, 0);
-            display.print("Status: ");
-            display.setTextColor(EPD_BLACK);
-            display.println("WiFi Connected");
-            display.setTextColor(EPD_RED);
-            display.print("SSID: ");
-            display.setTextColor(EPD_BLACK);
-            display.println(WiFi.SSID());
-            display.setTextColor(EPD_RED);
-            display.print("IP: ");
-            display.setTextColor(EPD_BLACK);
-            display.println(WiFi.localIP().toString().c_str());
-            display.println("Connecting to time server... ");
-            xQueueSend(epdqueue, NULL, 0);
-            
-            // push update to epd task
-        }
-        break;
-        case WIFI_EVENT_DISCONNECTED:
-        {
-            // attempt reconnect
-        }
-        break;
-        case FORCE_WIFI_SYNC:
-        {
-            ntpSync();
-            // trigger ntp and timezone sync
-        }
-        break;
-        case CLEAR_WIFI:
-        {
-            if (WiFi.status() != WL_CONNECTED)
-            {
-                WiFi.mode(WIFI_STA);
-                WiFi.begin();
+                // initial connection at boot
+                Serial.println("[WiFi Task] Wifi Event: Wifi Boot");
                 unsigned long start = millis();
                 while (WiFi.status() != WL_CONNECTED && millis() - start < 10000)
                 {
                     vTaskDelay(pdMS_TO_TICKS(500));
                 }
+                if (WiFi.status() != WL_CONNECTED)
+                {
+                    Serial.println("[WiFi Task] Could not connect. Starting provisioning portal.");
+                    display.clearBuffer();
+                    display.setCursor(0, 0);
+                    display.setTextSize(1);
+                    display.setTextColor(EPD_RED);
+                    display.print("Status: ");
+                    display.println("Configure WiFI");
+                    display.setTextColor(EPD_BLACK);
+                    display.println("Connect your device to AP SSID: ");
+                    display.setTextColor(EPD_BLACK);
+                    display.println(WIFI_PROV_SSID);
+                    display.println("Then sign into captive portal");
+                    display.println("or google.com in your browser");
+                    xQueueSend(epdqueue, NULL, 0);
+                    provisioner.startProvisioning();
+                    // display.display();
+                }
+                if (WiFi.status() == WL_CONNECTED)
+                {
+                    
+                    Serial.printf("[WiFi Task] Successfully connected to WiFi! IP: %s\n", WiFi.localIP().toString().c_str());
+                    // display.clearBuffer();
+                    display.setTextSize(1);
+                    display.setTextColor(EPD_RED);
+                    display.setCursor(0, 0);
+                    display.print("Status: ");
+                    display.setTextColor(EPD_BLACK);
+                    display.println("WiFi Connected");
+                    display.setTextColor(EPD_RED);
+                    display.print("SSID: ");
+                    display.setTextColor(EPD_BLACK);
+                    display.println(WiFi.SSID());
+                    display.setTextColor(EPD_RED);
+                    display.print("IP: ");
+                    display.setTextColor(EPD_BLACK);
+                    display.println(WiFi.localIP().toString().c_str());
+                    display.println("Connecting to time server... ");
+                    xQueueSend(epdqueue, NULL, 0);
+                    vTaskDelay(5000);
+                    ntpSync();
+                }
             }
-            WiFi.disconnect(false, true);
-            ESP.restart();
-        }
-        break;
+            break;
+
+            case WIFI_EVENT_CONNECTED:
+            {
+                Serial.println("[WiFi Task] Wifi Event: Connected");
+                // ntpSync();
+                //  push update to epd task
+            }
+            break;
+
+            case FORCE_WIFI_SYNC:
+            {
+                Serial.println("[WiFi Task] Wifi Event: force WIFI Sync.");
+                ntpSync();
+                // trigger ntp and timezone sync
+            }
+            break;
+            case CLEAR_WIFI:
+            {
+                Serial.println("[WiFi Task] Wifi Event: Clear Wifi.");
+                if (WiFi.status() != WL_CONNECTED)
+                {
+                    WiFi.mode(WIFI_STA);
+                    WiFi.begin();
+                    unsigned long start = millis();
+                    while (WiFi.status() != WL_CONNECTED && millis() - start < 10000)
+                    {
+                        vTaskDelay(pdMS_TO_TICKS(500));
+                    }
+                }
+                WiFi.disconnect(false, true);
+                ESP.restart();
+            }
+            break;
+            }
         }
     }
-
-    // Serial.printf("[WiFi Task] Started. Manual Sync: %s\n", isManualSync ? "Yes" : "No");
-
-    if (WiFi.status() == WL_CONNECTED)
-    {
-
-        // display.display();
-    }
-
-    // WiFi.disconnect(true);
-    // WiFi.mode(WIFI_OFF);
-    // Serial.println("[WiFi Task] WiFi disabled. Task finished.");
-    // vTaskDelete(NULL);
-    // vTaskSuspend(NULL);
 }
 
 void task_epd(void *pvParameters)
@@ -395,7 +383,9 @@ void task_epd(void *pvParameters)
     display.setCursor(0, 0);
     while (true)
     {
-        xQueueReceive(epdqueue, NULL, portMAX_DELAY);
-        display.display();
+        if (xQueueReceive(epdqueue, NULL, portMAX_DELAY))
+        {
+            display.display();
+        }
     }
 }
