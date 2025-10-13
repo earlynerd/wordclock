@@ -8,7 +8,10 @@
 
 #include <Arduino.h>
 
-// The main function for the button checking task.
+/**
+ * @brief The main function for the button checking task.
+ * @param pvParameters A void pointer to the global AppContext struct.
+ */
 void taskButtonCheck(void *pvParameters);
 
 #endif // BUTTON_TASK_H

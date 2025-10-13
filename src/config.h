@@ -44,6 +44,8 @@
 #define TIME_API_URL    "https://worldtimeapi.org/api/ip"
 #define NTP_SERVER_1    "pool.ntp.org"
 #define NTP_SERVER_2    "time.nist.gov"
+#define MAX_SYNC_RETRIES 30      // Number of times to attempt a sync before giving up
+#define RETRY_DELAY_MS   5000   // Delay between failed sync attempts
 
 // --- Non-Volatile Storage (NVS) Keys ---
 // Used to save the timezone between reboots
@@ -53,4 +55,3 @@
 
 
 #endif // CONFIG_H
-
