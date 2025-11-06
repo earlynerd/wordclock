@@ -20,10 +20,12 @@
 #include <stdlib.h> // Required for setenv
 #include <TzDbLookup.h>
 #include <sys/time.h>
+#include "fonts/FreeSans9pt7b.h"
 
 // --- Helper Function Prototypes ---
 static bool initializeFromRtc(AppContext *context);
 static bool getTimezoneAndSync(AppContext *context);
+static void blankDisplay(AppContext *context);
 
 void taskWiFi(void *pvParameters)
 {
@@ -46,14 +48,17 @@ void taskWiFi(void *pvParameters)
             {
                 Serial.println("[WiFi Task] Event: Disconnected. Attempting to reconnect...");
                 Serial.println("[WiFi Task] Could not connect. Starting provisioning portal.");
+                //context->display_offset_x = random(context->maxiumum_offset);
+                //context->display_offset_y = random(context->maxiumum_offset);
                 context->display.clearBuffer();
-                context->display.setCursor(0, 0);
+                context->display.fillScreen(EPD_WHITE);
+                context->display.setCursor(context->display_offset_x, context->display_offset_y);
                 context->display.setTextSize(1);
-                context->display.setTextColor(EPD_RED);
-                context->display.println("Status: Disconnected");
                 context->display.setTextColor(EPD_BLACK);
+                context->display.println("Status: Disconnected");
+                //context->display.setTextColor(EPD_WHITE);
                 context->display.println("Attempting Re-Connect...");
-                xQueueSend(context->epdQueue, NULL, 0);
+                xQueueSend(context->epdQueue, NULL, portMAX_DELAY);
                 WiFi.begin();
             }
             break;
@@ -84,15 +89,18 @@ void taskWiFi(void *pvParameters)
                 if (WiFi.status() != WL_CONNECTED)
                 {
                     Serial.println("[WiFi Task] Could not connect. Starting provisioning portal.");
+                    //context->display_offset_x = random(context->maxiumum_offset);
+                    //context->display_offset_y = random(context->maxiumum_offset);
                     context->display.clearBuffer();
-                    context->display.setCursor(0, 0);
+                    context->display.fillScreen(EPD_WHITE);
+                    context->display.setCursor(context->display_offset_x, context->display_offset_y);
                     context->display.setTextSize(1);
-                    context->display.setTextColor(EPD_RED);
-                    context->display.println("Status: Configure WiFi");
                     context->display.setTextColor(EPD_BLACK);
+                    context->display.println("Status: Configure WiFi");
+                    //context->display.setTextColor(EPD_BLACK);
                     context->display.printf("Connect to AP:\n%s\n", WIFI_PROV_SSID);
                     context->display.println("and sign into the portal.");
-                    xQueueSend(context->epdQueue, NULL, 0);
+                    xQueueSend(context->epdQueue, NULL, portMAX_DELAY);
 
                     WiFiProvisioner::Config customCfg(
                         WIFI_PROV_SSID,                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        // Access Point Name
@@ -130,21 +138,24 @@ void taskWiFi(void *pvParameters)
                 SystemCommand cmd = {SystemCommandType::SHOW_WIFI_ANIMATION};
                 xQueueSend(context->systemCommandQueue, &cmd, 0);
                 vTaskDelay(pdMS_TO_TICKS(100));
-
+                //context->display_offset_x = random(context->maxiumum_offset);
+                //context->display_offset_y = random(context->maxiumum_offset);
                 context->display.clearBuffer();
-                context->display.setCursor(0, 0);
+                context->display.fillScreen(EPD_WHITE);
+                context->display.setCursor(context->display_offset_x, context->display_offset_y);
                 context->display.setTextSize(1);
-                context->display.setTextColor(EPD_RED);
-                context->display.println("Status: WiFi Connected");
+                context->display.setTextColor(EPD_BLACK);
+                context->display.println("WiFi Connected");
+                context->display.setTextColor(EPD_BLACK);
                 context->display.printf("SSID: ");
                 context->display.setTextColor(EPD_BLACK);
                 context->display.printf("%s\n", WiFi.SSID().c_str());
-                context->display.setTextColor(EPD_RED);
+                context->display.setTextColor(EPD_BLACK);
                 context->display.printf("IP: ");
                 context->display.setTextColor(EPD_BLACK);
                 context->display.printf("%s\n", WiFi.localIP().toString().c_str());
                 context->display.println("Syncing time...");
-                xQueueSend(context->epdQueue, NULL, 0);
+                xQueueSend(context->epdQueue, NULL, portMAX_DELAY);
 
                 if (getTimezoneAndSync(context))
                 {
@@ -167,6 +178,43 @@ void taskWiFi(void *pvParameters)
                 ESP.restart();
             }
             break;
+
+            case SNTP_SYNC:
+            {
+                // update epd with full display refresh, resynchronize RTC
+                struct tm timeinfo;
+
+                //context->display_offset_x = random(context->maxiumum_offset);
+                //context->display_offset_y = random(context->maxiumum_offset);
+                context->display.clearBuffer();
+                context->display.fillScreen(EPD_WHITE);
+                xQueueSend(context->epdQueue, NULL, portMAX_DELAY);
+                context->display.setCursor(context->display_offset_x, context->display_offset_y);
+                context->display.setTextSize(1);
+                context->display.setTextColor(EPD_BLACK);
+                context->display.println("Status: WiFi Connected");
+                context->display.setTextColor(EPD_BLACK);
+                context->display.printf("SSID: ");
+                context->display.setTextColor(EPD_BLACK);
+                context->display.printf("%s\n", WiFi.SSID().c_str());
+                context->display.setTextColor(EPD_BLACK);
+                context->display.printf("IP: ");
+                context->display.setTextColor(EPD_BLACK);
+                context->display.printf("%s\n", WiFi.localIP().toString().c_str());
+                time_t now_utc;
+                time(&now_utc);
+                context->rtc.adjust(DateTime(now_utc));
+                Serial.println("[Time Sync] RTC has been updated with correct UTC time.");
+                setenv("TZ", context->time_zone, 1);
+                tzset();
+                char time_buf[64];
+                localtime_r(&now_utc, &timeinfo);
+                strftime(time_buf, sizeof(time_buf), "%b %d %H:%M:%S %Z", &timeinfo);
+                //context->display.println("Sync successful!");
+                context->display.printf("Sync: %s\n", time_buf);
+                xQueueSend(context->epdQueue, NULL, portMAX_DELAY);
+            }
+            break;
             }
         }
     }
@@ -177,17 +225,60 @@ void task_epd(void *pvParameters)
 {
     Serial.println("EPD Task started.");
     auto *context = static_cast<AppContext *>(pvParameters);
-
+    //pinMode(16, INPUT);
     context->display.begin();
-    context->display.clearBuffer();
+    //context->display.powerUp();
     context->display.setRotation(2);
-
+    context->display.clearBuffer();
+    context->display.fillScreen(EPD_WHITE);
+    //context->display.fillRect(0, 0, context->display.width(), context->display.height(), EPD_BLACK);
+    context->display.display();
+    context->display.setFont(&FreeSans9pt7b);
+    
+    //blankDisplay(context);
+    //vTaskDelay(8000);
+    //while (digitalRead(16))
+    //{
+   //     vTaskDelay(100); 
+   // }
+    /*
+    context->display.clearBuffer();
+    
+    context->display.display();
+    while (!digitalRead(16))
+    {
+        vTaskDelay(100); 
+    }
+    context->display.clearBuffer();
+    context->display.fillScreen(EPD_BLACK);
+    context->display.display();
+    while (!digitalRead(16))
+    {
+        vTaskDelay(100); 
+    }
+    context->display.clearBuffer();
+    context->display.fillScreen(EPD_WHITE);
+    context->display.display();
+    while (!digitalRead(16))
+    {
+        vTaskDelay(100); 
+    }
+*/
     for (;;)
     {
         if (xQueueReceive(context->epdQueue, NULL, portMAX_DELAY))
         {
             Serial.println("[EPD] Updating physical display.");
+            
+            context->display.powerUp();
+            vTaskDelay(100);
             context->display.display();
+            vTaskDelay(100);
+            context->display.powerDown();
+            //while (digitalRead(16))
+            //{
+            //vTaskDelay(5000); 
+           // }
         }
     }
 }
@@ -280,9 +371,9 @@ static bool getTimezoneAndSync(AppContext *context)
     if (!tz_success)
     {
         Serial.println("[Time Sync] Failed to fetch timezone after all retries.");
-        context->display.setTextColor(EPD_RED);
+        context->display.setTextColor(EPD_BLACK);
         context->display.println("Timezone Fetch Failed.");
-        xQueueSend(context->epdQueue, NULL, 0);
+        xQueueSend(context->epdQueue, NULL, portMAX_DELAY);
         return false;
     }
 
@@ -307,9 +398,9 @@ static bool getTimezoneAndSync(AppContext *context)
             char time_buf[64];
             localtime_r(&now_utc, &timeinfo);
             strftime(time_buf, sizeof(time_buf), "%b %d %H:%M:%S %Z", &timeinfo);
-            context->display.println("Sync successful!");
-            context->display.printf("Last sync:\n%s\n", time_buf);
-            xQueueSend(context->epdQueue, NULL, 0);
+            //context->display.println("Sync successful!");
+            context->display.printf("Sync: %s\n", time_buf);
+            xQueueSend(context->epdQueue, NULL,portMAX_DELAY);
 
             if (!context->time_is_valid)
             {
@@ -323,8 +414,24 @@ static bool getTimezoneAndSync(AppContext *context)
     }
 
     Serial.println("[Time Sync] Failed to sync NTP after all retries.");
-    context->display.setTextColor(EPD_RED);
-    context->display.println("NTP Sync Failed.");
-    xQueueSend(context->epdQueue, NULL, 0);
+    context->display.setTextColor(EPD_BLACK);
+    context->display.println("NTP Sync Fail.");
+    xQueueSend(context->epdQueue, NULL, portMAX_DELAY);
     return false;
+}
+
+static void blankDisplay(AppContext *context)
+{
+    int16_t w = context->display.width();
+    int16_t h = context->display.height();
+    context->display.fillRect(0,0, w,h,  EPD_WHITE);
+    //context->display.clearBuffer();
+    //context->display.fillRect(0, 0, w/4, context->display.height(), EPD_BLACK);
+    //context->display.display();
+    //context->display.fillRect(w/4, 0, w/4, context->display.height(), EPD_BLACK);
+    //context->display.display();
+    //context->display.fillRect(w/2, 0, w/4, context->display.height(), EPD_BLACK);
+    //context->display.display();
+    //context->display.fillRect(3*w /4, 0, w/4, context->display.height(), EPD_BLACK);
+    //context->display.display();
 }

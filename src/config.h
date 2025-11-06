@@ -15,7 +15,7 @@
 #define EPD_SCK     5
 #define EPD_MOSI    18
 #define EPD_MISO    19
-#define EPD_RESET   -1
+#define EPD_RESET   32
 #define SRAM_CS     -1
 #define EPD_SPI &SPI // primary SPI
 #define FLEXIBLE_213
@@ -28,7 +28,7 @@
 #define LED_TYPE    WS2812B
 #define COLOR_ORDER GRB
 #define NUM_LEDS    58
-#define BRIGHTNESS  168 // Lowered for longevity and comfort
+#define BRIGHTNESS  192 // Lowered for longevity and comfort
 
 // --- Hardware Pins ---
 #define BUTTON_1_PIN 14
@@ -45,7 +45,7 @@
 #define NTP_SERVER_1    "pool.ntp.org"
 #define NTP_SERVER_2    "time.nist.gov"
 #define MAX_SYNC_RETRIES 30      // Number of times to attempt a sync before giving up
-#define RETRY_DELAY_MS   5000   // Delay between failed sync attempts
+#define RETRY_DELAY_MS   500   // Delay between failed sync attempts
 
 // --- Non-Volatile Storage (NVS) Keys ---
 // Used to save the timezone between reboots

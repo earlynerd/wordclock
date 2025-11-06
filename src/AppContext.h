@@ -36,6 +36,7 @@ typedef enum {
     WIFI_EVENT_CONNECTED,
     WIFI_EVENT_DISCONNECTED,
     CLEAR_WIFI,             // Command to erase WiFi credentials
+    SNTP_SYNC
 } NetworkEvent_t;
 
 
@@ -44,7 +45,12 @@ struct AppContext {
     // Hardware Objects
     RTC_DS3231 rtc;
     CRGB leds[NUM_LEDS];
-    Adafruit_IL0373 display;
+Adafruit_SSD1680 display;
+ //Adafruit_SSD1675 display;
+//Adafruit_SSD1675B display;
+    //Adafruit_UC8151D display;
+
+    //Adafruit_SSD1680 display;
     Preferences preferences;
 
     // RTOS Handles
@@ -56,9 +62,12 @@ struct AppContext {
     char time_zone[64] = "UTC";
     int colorSchemeIndex = 0;
     bool time_is_valid = false;
-
+    uint32_t display_offset_x = 0;
+    uint32_t display_offset_y = 16;
+    const uint32_t maxiumum_offset = 16;
     // Constructor to initialize aggregated objects like the display
-    AppContext() : display(212, 104, EPD_DC, EPD_RESET, EPD_CS, SRAM_CS, EPD_BUSY, EPD_SPI) {}
+    //AppContext() : display(212, 104, EPD_DC, EPD_RESET, EPD_CS, SRAM_CS, EPD_BUSY, EPD_SPI) {}
+    AppContext() : display(250, 122, EPD_DC, EPD_RESET, EPD_CS, SRAM_CS, EPD_BUSY, EPD_SPI) {}
 };
 
 #endif // APP_CONTEXT_H
